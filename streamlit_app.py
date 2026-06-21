@@ -196,7 +196,7 @@ def render_sidebar() -> dict:
         st.subheader("🤖 ML Insights")
         show_ml = st.checkbox(
             "Show ML model results",
-            value=False,
+            value=True,
             help="Train a Random Forest model to predict city scores and show prescriptive recommendations.",
         )
 
@@ -224,18 +224,19 @@ def run_ml_pipeline(_scored: gpd.GeoDataFrame):
     """
     Train and evaluate ML models on the scored cities GDF.
 
-    Cached so re-training only happens when the scoring weights change.
-
-    Returns:
-        (model_results_df, scored_with_ml_gdf, recommendations_df, importances_series)
+    Returns plain DataFrames (cache-safe — no GeoDataFrame serialization).
     """
     logger.info("Running ML pipeline...")
     model_results = evaluate_models(_scored)
     scorer = MLScorer()
     scored_ml = scorer.fit_transform(_scored)
     recommendations = scorer.prescriptive_recommendations(scored_ml)
-    importances = scorer.feature_importances
-    return model_results, scored_ml, recommendations, importances
+    importances_dict = (
+        scorer.feature_importances.to_dict()
+        if scorer.feature_importances is not None else {}
+    )
+    scores_df = scored_ml[["name", "neighborhood_score", "ml_score", "ml_rank"]].copy()
+    return model_results, scores_df, recommendations, importances_dict
 
 
 # ── Main page ────────────────────────────────────────────────────────────────────
@@ -267,6 +268,13 @@ def render_main(
         show_parks=ui["show_parks"],
     )
 
+    # Merge ML scores into filtered so they appear in the ranking table
+    if ui.get("show_ml"):
+        _, scores_df, _, _ = run_ml_pipeline(scored)
+        filtered = filtered.merge(
+            scores_df[["name", "ml_score", "ml_rank"]], on="name", how="left"
+        )
+
     col_map, col_table = st.columns([3, 2])
 
     with col_map:
@@ -296,6 +304,7 @@ def _render_ranking_table(scored: gpd.GeoDataFrame) -> None:
         "rank":                    "Rank",
         "name":                    "City",
         "neighborhood_score":      "Score",
+        "ml_score":                "ML Score",
         "avg_price":               "Avg Price (₪)",
         "transit_stops_500m":      "Transit (500m)",
         "parks_1km":               "Parks (1km)",
@@ -401,7 +410,11 @@ def _render_ml_section(scored: gpd.GeoDataFrame) -> None:
         "the correct strategy for n=12 cities."
     )
 
-    model_results, scored_ml, recommendations, importances = run_ml_pipeline(scored)
+    model_results, scores_df, recommendations, importances_dict = run_ml_pipeline(scored)
+    importances = (
+        pd.Series(importances_dict).sort_values(ascending=False)
+        if importances_dict else None
+    )
 
     col_table, col_chart = st.columns(2)
 
@@ -434,16 +447,13 @@ def _render_ml_section(scored: gpd.GeoDataFrame) -> None:
 
     # ML score vs rule-based score comparison
     st.markdown("**Rule-based score vs ML predicted score (per city)**")
-    compare_cols = {"name": "City", "neighborhood_score": "Rule-based Score", "ml_score": "ML Score", "ml_rank": "ML Rank"}
-    available = {k: v for k, v in compare_cols.items() if k in scored_ml.columns}
-    compare_df = (
-        scored_ml[list(available.keys())]
-        .rename(columns=available)
-        .sort_values("ML Score", ascending=False)
-        .reset_index(drop=True)
-    )
-    if "Rule-based Score" in compare_df.columns:
-        compare_df["Δ Score"] = (compare_df["ML Score"] - compare_df["Rule-based Score"]).round(1)
+    compare_df = scores_df.rename(columns={
+        "name": "City",
+        "neighborhood_score": "Rule-based Score",
+        "ml_score": "ML Score",
+        "ml_rank": "ML Rank",
+    }).sort_values("ML Score", ascending=False).reset_index(drop=True)
+    compare_df["Δ Score"] = (compare_df["ML Score"] - compare_df["Rule-based Score"]).round(1)
     st.dataframe(compare_df, hide_index=True, use_container_width=True)
 
     # Prescriptive recommendations
