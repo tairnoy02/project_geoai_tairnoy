@@ -46,6 +46,7 @@ from src.scoring.neighborhood_score import (
     run_scoring_pipeline,
     filter_by_budget,
 )
+from src.scoring.ml_scorer import MLScorer, evaluate_models
 from src.app.map_utils import build_neighborhood_map
 from src.config import (
     UI_DEFAULT_BUDGET_ILS,
@@ -192,6 +193,13 @@ def render_sidebar() -> dict:
         show_transit = st.checkbox("Show transit stops", value=False)
         show_parks   = st.checkbox("Show parks",         value=False)
 
+        st.subheader("🤖 ML Insights")
+        show_ml = st.checkbox(
+            "Show ML model results",
+            value=False,
+            help="Train a Random Forest model to predict city scores and show prescriptive recommendations.",
+        )
+
         st.divider()
         st.caption(
             "📌 Data: Mock data (MVP)\n\n"
@@ -205,7 +213,29 @@ def render_sidebar() -> dict:
         "parks_weight":   parks_weight,
         "show_transit":   show_transit,
         "show_parks":     show_parks,
+        "show_ml":        show_ml,
     }
+
+
+# ── ML pipeline (cached) ─────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner="🤖 Training ML scoring models...")
+def run_ml_pipeline(_scored: gpd.GeoDataFrame):
+    """
+    Train and evaluate ML models on the scored cities GDF.
+
+    Cached so re-training only happens when the scoring weights change.
+
+    Returns:
+        (model_results_df, scored_with_ml_gdf, recommendations_df, importances_series)
+    """
+    logger.info("Running ML pipeline...")
+    model_results = evaluate_models(_scored)
+    scorer = MLScorer()
+    scored_ml = scorer.fit_transform(_scored)
+    recommendations = scorer.prescriptive_recommendations(scored_ml)
+    importances = scorer.feature_importances
+    return model_results, scored_ml, recommendations, importances
 
 
 # ── Main page ────────────────────────────────────────────────────────────────────
@@ -254,6 +284,10 @@ def render_main(
     # ── Score breakdown chart ─────────────────────────────────────────────────────
     if "score_affordability" in filtered.columns:
         _render_score_breakdown(filtered)
+
+    # ── ML section ────────────────────────────────────────────────────────────────
+    if ui.get("show_ml"):
+        _render_ml_section(scored)
 
 
 def _render_ranking_table(scored: gpd.GeoDataFrame) -> None:
@@ -353,6 +387,74 @@ def _render_score_breakdown(scored: gpd.GeoDataFrame) -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
     st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_ml_section(scored: gpd.GeoDataFrame) -> None:
+    """Render ML model comparison, feature importance, and prescriptive recommendations."""
+    import plotly.graph_objects as go
+
+    st.divider()
+    st.subheader("🤖 ML Model — Predictive & Prescriptive Layer")
+    st.caption(
+        "A Random Forest regressor learns to predict city suitability scores "
+        "from geospatial features. Evaluation uses Leave-One-Out CV (LOO) — "
+        "the correct strategy for n=12 cities."
+    )
+
+    model_results, scored_ml, recommendations, importances = run_ml_pipeline(scored)
+
+    col_table, col_chart = st.columns(2)
+
+    with col_table:
+        st.markdown("**Model comparison — LOO-CV MAE (lower is better)**")
+        st.dataframe(model_results, hide_index=True, use_container_width=True)
+        best_mae = model_results.iloc[0]["MAE (LOO-CV)"]
+        baseline_mae = model_results[model_results["Model"] == "Baseline (mean)"]["MAE (LOO-CV)"].values[0]
+        improvement = baseline_mae - best_mae
+        st.success(
+            f"Best model improves over baseline by **{improvement:.2f} score points** MAE"
+        )
+
+    with col_chart:
+        if importances is not None and len(importances) > 0:
+            st.markdown("**Feature importance (Random Forest)**")
+            top = importances.head(8)
+            fig = go.Figure(go.Bar(
+                x=top.values,
+                y=top.index,
+                orientation="h",
+                marker_color="#4c72b0",
+            ))
+            fig.update_layout(
+                height=300,
+                margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="Importance",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ML score vs rule-based score comparison
+    st.markdown("**Rule-based score vs ML predicted score (per city)**")
+    compare_cols = {"name": "City", "neighborhood_score": "Rule-based Score", "ml_score": "ML Score", "ml_rank": "ML Rank"}
+    available = {k: v for k, v in compare_cols.items() if k in scored_ml.columns}
+    compare_df = (
+        scored_ml[list(available.keys())]
+        .rename(columns=available)
+        .sort_values("ML Score", ascending=False)
+        .reset_index(drop=True)
+    )
+    if "Rule-based Score" in compare_df.columns:
+        compare_df["Δ Score"] = (compare_df["ML Score"] - compare_df["Rule-based Score"]).round(1)
+    st.dataframe(compare_df, hide_index=True, use_container_width=True)
+
+    # Prescriptive recommendations
+    if not recommendations.empty:
+        st.divider()
+        st.markdown("**📋 Prescriptive recommendations — low-scoring cities**")
+        st.caption(
+            "Cities below the median ML score and the main improvement action "
+            "based on their weakest geospatial dimension."
+        )
+        st.dataframe(recommendations, hide_index=True, use_container_width=True)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────────
