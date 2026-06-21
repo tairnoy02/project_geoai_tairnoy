@@ -1,6 +1,8 @@
 # 🏠 Where Should I Buy?
 ### GeoAI-Powered City Suitability Analysis — Gush Dan Metropolitan Area
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://projectgeoaitairnoy.streamlit.app/)
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![GeoPandas](https://img.shields.io/badge/GeoPandas-0.14-green)](https://geopandas.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32-red)](https://streamlit.io/)
