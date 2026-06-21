@@ -218,10 +218,10 @@ def render_main(
 ) -> None:
     """Render the main content area: map + ranking table."""
 
-    st.title("📍 Neighborhood Suitability Map")
+    st.title("📍 City Suitability Map")
     st.caption(
-        "Explore the best neighborhoods to buy in Gush Dan. "
-        "Click any neighborhood polygon for details. "
+        "Explore the best cities to buy in Gush Dan. "
+        "Click any city polygon for details. "
         "Adjust weights in the sidebar to personalise your search."
     )
 
@@ -244,7 +244,7 @@ def render_main(
         st_folium(fmap, width=700, height=520, returned_objects=[])
 
     with col_table:
-        st.subheader("🏆 Neighborhood Rankings")
+        st.subheader("🏆 City Rankings")
         _render_ranking_table(filtered)
 
     # ── Summary metrics ──────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ def _render_ranking_table(scored: gpd.GeoDataFrame) -> None:
     """Display a styled ranking table."""
     display_cols = {
         "rank":                    "Rank",
-        "name":                    "Neighborhood",
+        "name":                    "City",
         "neighborhood_score":      "Score",
         "avg_price":               "Avg Price (₪)",
         "transit_stops_500m":      "Transit (500m)",
@@ -297,10 +297,10 @@ def _render_summary_metrics(scored: gpd.GeoDataFrame, ui: dict) -> None:
     best = scored.sort_values("neighborhood_score", ascending=False).iloc[0]
 
     with col1:
-        st.metric("🏘️ Neighborhoods Found", len(scored))
+        st.metric("🏘️ Cities Found", len(scored))
     with col2:
         st.metric(
-            "🥇 Top Neighborhood",
+            "🥇 Top City",
             best.get("name", "—"),
             help=f"Score: {best.get('neighborhood_score', 0):.1f}/100",
         )
@@ -318,7 +318,7 @@ def _render_score_breakdown(scored: gpd.GeoDataFrame) -> None:
     """Render a bar chart of score components per neighborhood."""
     import plotly.graph_objects as go
 
-    st.subheader("📊 Score Breakdown by Neighborhood")
+    st.subheader("📊 Score Breakdown by City")
 
     df = scored.sort_values("rank").head(12)  # Top 12 for readability
 
@@ -346,7 +346,7 @@ def _render_score_breakdown(scored: gpd.GeoDataFrame) -> None:
 
     fig.update_layout(
         barmode="group",
-        xaxis_title="Neighborhood",
+        xaxis_title="City",
         yaxis_title="Sub-score (0–100)",
         height=350,
         margin=dict(l=20, r=20, t=20, b=60),
