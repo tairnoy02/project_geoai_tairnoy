@@ -14,8 +14,8 @@ Apartment buyers in the Gush Dan metropolitan area (Tel Aviv and surroundings) f
 
 **Where Should I Buy?** is a GeoAI decision-support system that:
 1. **Aggregates** geospatial layers (real estate transactions, transit stops, parks, city boundaries) into a unified dataset
-2. **Scores** each city on a composite suitability index (0–100)
-3. **Predicts** suitability scores using a supervised ML model (Random Forest Regression)
+2. **Scores** each city on a composite suitability index (0–100) — rule-based and ML-predicted scores shown side by side in the ranking table
+3. **Predicts** suitability scores using a supervised ML model (Random Forest Regression) with LOO-CV evaluation and feature importance
 4. **Recommends** targeted improvements for low-scoring cities (prescriptive stage)
 
 ---
@@ -210,7 +210,8 @@ streamlit run streamlit_app.py
 
 Open [http://localhost:8501](http://localhost:8501).
 
-To see the ML layer, enable **"Show ML model results"** in the sidebar.
+The ML layer is enabled by default — the ranking table includes both the rule-based score and the ML-predicted score side by side.
+To hide the ML section, uncheck **"Show ML model results"** in the sidebar.
 
 ---
 
