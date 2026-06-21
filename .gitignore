@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.Python
+env/
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — never commit raw/processed data
+data/raw/
+data/processed/
+data/external/
+*.parquet
+*.geojson
+*.csv
+*.shp
+*.dbf
+*.shx
+*.prj
+
+# Secrets / environment
+.env
+.env.local
+*.key
+*.pem
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*~
+
+# Test scripts (temporary)
+test_*.py
+
+# osmnx / requests cache
+cache/
+
+# Streamlit
+.streamlit/secrets.toml
